@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CJS- CTN 장비 관리 시스템</title>
+    <!-- 구글 폰트 (한국어 지원) -->
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <script type="module" crossorigin src="/assets/index-tgbgwIRG.js"></script>
+  <link rel="stylesheet" crossorigin href="/assets/index-BhYcVvpW.css">
+</head>
+<body class="login-body">
+
+    <!-- 배경 빛 효과 (장식) -->
+    <div class="bg-orbs">
+        <div class="orb orb-1"></div>
+        <div class="orb orb-2"></div>
+        <div class="orb orb-3"></div>
+    </div>
+
+    <!-- 로그인 카드 -->
+    <div class="login-wrapper">
+        <div class="login-card">
+
+            <!-- 로고 영역 -->
+            <div class="login-logo">
+                <!--
+                    로고 이미지를 assets/logo.png로 넣으면 자동으로 표시됩니다.
+                    이미지가 없으면 아래 fallback(📻 아이콘)이 보입니다.
+                -->
+                <div class="logo-image-wrapper">
+                    <img src="data:image/png;base64,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" alt="방송부 로고" class="logo-image"
+                         onerror="this.style.display='none'; document.getElementById('logoFallback').style.display='flex'">
+                    <div id="logoFallback" class="logo-fallback" style="display:none">📻</div>
+                </div>
+                <div class="logo-text">
+                    <h1 class="logo-title">CTN</h1>
+                    <p class="logo-subtitle">장비 관리 시스템</p>
+                </div>
+            </div>
+
+            <!-- 구분선 -->
+            <div class="login-divider">
+                <span>방송부 부원 전용</span>
+            </div>
+
+            <!-- 구글 로그인 버튼 -->
+            <button id="loginBtn" class="btn-google-login" type="button">
+                <svg viewBox="0 0 24 24" class="google-icon" aria-hidden="true">
+                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                </svg>
+                학교 Google 계정으로 로그인
+            </button>
+
+            <!-- 로딩 중 표시 -->
+            <div id="loginLoading" class="login-loading hidden">
+                <div class="spinner"></div>
+                <span>로그인 확인 중...</span>
+            </div>
+
+            <!-- 에러 메시지 -->
+            <div id="loginError" class="login-error hidden">
+                <svg viewBox="0 0 24 24" class="error-icon" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="12" y1="8" x2="12" y2="12"></line>
+                    <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                </svg>
+                <p id="loginErrorMsg">허용되지 않은 계정입니다.</p>
+            </div>
+        </div>
+
+        <p class="login-footer">접속 문제가 있으면 30730 황성주에게 문의하세요</p>
+    </div>
+
+    <!-- ============================================================
+         Firebase 로그인 스크립트
+         type="module" : ES모듈 방식 (import/export 사용 가능)
+         ============================================================ -->
+</body>
+</html>
