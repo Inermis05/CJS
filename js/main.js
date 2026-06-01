@@ -27,11 +27,17 @@ const db   = getFirestore(app);
 let currentUser   = null;  // 현재 로그인한 사용자 정보
 let allEquipment  = [];    // 전체 장비 목록
 let allBookings   = [];    // 전체 신청 목록
+let allVenueBookings = []; // 전체 장소 신청 목록
 let calYear       = new Date().getFullYear();  // 달력 연도
 let calMonth      = new Date().getMonth();     // 달력 월 (0=1월)
+let calMode         = 'equip'; // 달력 모드: 'equip' | 'venue'
+let currentStatusType = 'equip'; // 현황 페이지 유형
+let currentManageType = 'equip'; // 관리 페이지 유형
 let selectedEquipId  = null;   // 장비 현황 모달에서 선택된 장비
-let editingBookingId = null;   // 수정 중인 신청 ID
+let editingBookingId      = null; // 수정 중인 장비 신청 ID
+let editingVenueBookingId = null; // 수정 중인 장소 신청 ID
 let selectedEquipForBooking = null; // 신청 작성에서 선택한 장비
+let selectedVenueForBooking = null; // 장소 신청에서 선택한 장소
 let modalCalYear  = new Date().getFullYear(); // 모달 달력 연도
 let modalCalMonth = new Date().getMonth();    // 모달 달력 월
 
@@ -87,8 +93,8 @@ async function initApp() {
     // 사이드바에 유저 정보 표시
     renderUserInfo();
 
-    // 데이터 로드 (장비 목록 + 내 신청 목록)
-    await Promise.all([loadEquipment(), loadBookings()]);
+    // 데이터 로드 (장비 목록 + 신청 목록 + 장소 신청 목록)
+    await Promise.all([loadEquipment(), loadBookings(), loadVenueBookings()]);
 
     // 사이드바 메뉴 클릭 이벤트 등록
     document.querySelectorAll('.nav-item').forEach(item => {
@@ -102,7 +108,9 @@ async function initApp() {
     renderDashboard();
     renderEquipmentPage();
     renderManagePage();
+    renderVenueManagePage();
     renderBookingPage();
+    renderVenuePage();
 }
 
 // 사이드바 유저 정보 렌더링
@@ -168,6 +176,22 @@ async function loadBookings() {
     }
 }
 
+// 장소 신청 목록 불러오기
+async function loadVenueBookings() {
+    try {
+        const q    = query(collection(db, 'venueBookings'), orderBy('createdAt', 'desc'));
+        const snap = await getDocs(q);
+        allVenueBookings = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    } catch (e) {
+        console.error('장소 신청 목록 로드 실패:', e);
+    }
+}
+
+// 내 장소 신청만 필터링
+function myVenueBookings() {
+    return allVenueBookings.filter(b => b.userId === currentUser.uid);
+}
+
 // 내 신청만 필터링
 function myBookings() {
     return allBookings.filter(b => b.userId === currentUser.uid);
@@ -182,22 +206,54 @@ function renderDashboard() {
     renderMyBookingsMini();
 }
 
+// ── 달력 모드 전환 ──────────────────────────────────────────
+window.setCalendarMode = function(mode) {
+    calMode = mode;
+    document.getElementById('calToggleEquip').classList.toggle('active', mode === 'equip');
+    document.getElementById('calToggleVenue').classList.toggle('active', mode === 'venue');
+    document.getElementById('calLegendEquip').style.display = mode === 'equip' ? 'flex' : 'none';
+    document.getElementById('calLegendVenue').style.display = mode === 'venue' ? 'flex' : 'none';
+    closeDayDetail();
+    renderCalendar();
+};
+
+// ── 현황 페이지 유형 전환 ────────────────────────────────────
+window.switchStatusType = function(type) {
+    currentStatusType = type;
+    document.getElementById('statusTypeEquip').classList.toggle('active', type === 'equip');
+    document.getElementById('statusTypeVenue').classList.toggle('active', type === 'venue');
+    document.getElementById('equipStatusSection').style.display  = type === 'equip' ? '' : 'none';
+    document.getElementById('venueStatusSection').style.display  = type === 'venue' ? '' : 'none';
+};
+
+// ── 관리 페이지 유형 전환 ────────────────────────────────────
+window.switchManageType = function(type) {
+    currentManageType = type;
+    document.getElementById('manageTypeEquip').classList.toggle('active', type === 'equip');
+    document.getElementById('manageTypeVenue').classList.toggle('active', type === 'venue');
+    document.getElementById('bookingsList').style.display      = type === 'equip' ? '' : 'none';
+    document.getElementById('venueBookingsList').style.display = type === 'venue' ? '' : 'none';
+    if (type === 'equip') renderManagePage();
+    else renderVenueManagePage();
+};
+
 // ── 달력 렌더링 ─────────────────────────────────────────────
 function renderCalendar() {
     const months = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
     document.getElementById('calendarTitle').textContent = `${calYear}년 ${months[calMonth]}`;
 
     const today     = new Date();
-    const firstDay  = new Date(calYear, calMonth, 1).getDay();  // 이달 1일의 요일 (0=일)
-    const lastDate  = new Date(calYear, calMonth + 1, 0).getDate(); // 이달 마지막 날
+    const firstDay  = new Date(calYear, calMonth, 1).getDay();
+    const lastDate  = new Date(calYear, calMonth + 1, 0).getDate();
 
-    // 이달에 신청된 날짜들 모으기
-    const bookedDays   = new Set(); // 다른 사람 신청
-    const myDays       = new Set(); // 내 신청
+    const bookedDays = new Set();
+    const myDays     = new Set();
 
-    allBookings.forEach(b => {
+    const sourceList = calMode === 'venue' ? allVenueBookings : allBookings;
+
+    sourceList.forEach(b => {
         if (b.status === 'cancelled') return;
-        const dates = getBookingDates(b);
+        const dates = calMode === 'venue' ? (b.date ? [b.date] : []) : getBookingDates(b);
         dates.forEach(dateStr => {
             const d = new Date(dateStr);
             if (d.getFullYear() === calYear && d.getMonth() === calMonth) {
@@ -211,28 +267,32 @@ function renderCalendar() {
     const container = document.getElementById('calendarDays');
     container.innerHTML = '';
 
-    // 앞쪽 빈 칸 (이달 1일 전 빈 공간)
     for (let i = 0; i < firstDay; i++) {
         container.insertAdjacentHTML('beforeend', '<div class="calendar-day empty"></div>');
     }
 
-    // 날짜 채우기
+    const dotColor = calMode === 'venue' ? '#0EA5E9' : 'var(--primary)';
+
     for (let d = 1; d <= lastDate; d++) {
         const isToday   = (d === today.getDate() && calMonth === today.getMonth() && calYear === today.getFullYear());
-        const dayOfWeek = (firstDay + d - 1) % 7; // 0=일, 6=토
+        const dayOfWeek = (firstDay + d - 1) % 7;
         const dateStr   = `${calYear}-${String(calMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
 
         let classes = 'calendar-day';
-        if (isToday)       classes += ' today';
+        if (isToday)         classes += ' today';
         if (dayOfWeek === 0) classes += ' sunday';
         if (dayOfWeek === 6) classes += ' saturday';
 
         let eventsHTML = '';
         if (myDays.has(d))     eventsHTML += `<span class="event-dot" style="background:var(--success)"></span>`;
-        if (bookedDays.has(d)) eventsHTML += `<span class="event-dot"></span>`;
+        if (bookedDays.has(d)) eventsHTML += `<span class="event-dot" style="background:${dotColor}"></span>`;
+
+        const clickFn = calMode === 'venue'
+            ? `showVenueDayDetail('${dateStr}')`
+            : `showDayDetail('${dateStr}')`;
 
         container.insertAdjacentHTML('beforeend', `
-            <div class="${classes}" data-date="${dateStr}" onclick="showDayDetail('${dateStr}')">
+            <div class="${classes}" data-date="${dateStr}" onclick="${clickFn}">
                 <span class="day-number">${d}</span>
                 <div class="day-events">${eventsHTML}</div>
             </div>
@@ -394,6 +454,67 @@ window.showDayDetail = function(dateStr) {
     };
 
     // 패널 보이기 / 내 신청 목록 숨기기
+    document.getElementById('dayDetailCard').classList.remove('hidden');
+    document.getElementById('myBookingsCard').classList.add('hidden');
+};
+
+// ── 달력 장소 신청 날짜 클릭 상세 ───────────────────────────
+window.showVenueDayDetail = function(dateStr) {
+    const days    = ['일','월','화','수','목','금','토'];
+    const d       = new Date(dateStr + 'T00:00:00');
+    const dayName = days[d.getDay()];
+    const label   = `${d.getMonth()+1}월 ${d.getDate()}일 (${dayName})`;
+
+    document.querySelectorAll('#calendarDays .calendar-day').forEach(el => {
+        el.classList.toggle('selected', el.dataset.date === dateStr);
+    });
+
+    const dayVenues = allVenueBookings.filter(b =>
+        b.status !== 'cancelled' && b.date === dateStr
+    );
+
+    document.getElementById('dayDetailTitle').textContent = label;
+    document.getElementById('dayDetailSubtitle').textContent =
+        dayVenues.length === 0 ? '장소 신청 없음' : `장소 신청 ${dayVenues.length}건`;
+
+    const list = document.getElementById('dayDetailList');
+
+    if (dayVenues.length === 0) {
+        list.innerHTML = `
+            <div class="day-no-bookings">
+                <div class="day-no-bookings-icon">🏠</div>
+                이 날짜에 장소 신청이 없습니다
+            </div>`;
+    } else {
+        list.innerHTML = dayVenues.map(b => {
+            const isMine = b.userId === currentUser.uid;
+            const who    = isMine ? '나' : (b.userName || '부원');
+            const slots  = (b.timeSlots || []).join(' · ') || '—';
+            const purposeHTML = b.purpose
+                ? `<div class="day-booking-purpose">💬 ${escHtml(b.purpose)}</div>` : '';
+            return `
+                <div class="day-booking-entry ${isMine ? 'mine' : ''}">
+                    <div class="day-booking-equip">🏠 ${escHtml(b.venue || '장소')}</div>
+                    <div class="day-booking-meta">
+                        <div class="day-booking-who">
+                            👤 ${escHtml(who)}${isMine ? ' <span style="color:var(--success);font-weight:700">(나)</span>' : ''}
+                        </div>
+                        <div class="day-booking-time">🕐 ${escHtml(slots)}</div>
+                    </div>
+                    ${purposeHTML}
+                </div>`;
+        }).join('');
+    }
+
+    document.getElementById('dayDetailBookBtn').onclick = () => {
+        switchBookingType('venue');
+        goToPage('booking');
+        setTimeout(() => {
+            document.getElementById('venueDate').value = dateStr;
+            updateVenuePreview();
+        }, 100);
+    };
+
     document.getElementById('dayDetailCard').classList.remove('hidden');
     document.getElementById('myBookingsCard').classList.add('hidden');
 };
@@ -670,12 +791,13 @@ document.querySelectorAll('.modal-overlay').forEach(overlay => {
 
 let currentManageFilter = 'active';
 
-document.querySelectorAll('.filter-tab').forEach(tab => {
+document.querySelectorAll('.filter-tab[data-filter]').forEach(tab => {
     tab.addEventListener('click', () => {
-        document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.filter-tab[data-filter]').forEach(t => t.classList.remove('active'));
         tab.classList.add('active');
         currentManageFilter = tab.dataset.filter;
-        renderManagePage();
+        if (currentManageType === 'venue') renderVenueManagePage();
+        else renderManagePage();
     });
 });
 
@@ -781,75 +903,107 @@ window.cancelBooking = async function(bookingId) {
     }
 };
 
-// 기간 변경 모달 열기
+// 장비 기간 변경 모달 열기
 window.openEditModal = function(bookingId) {
     const booking = allBookings.find(b => b.id === bookingId);
     if (!booking) return;
-    editingBookingId = bookingId;
+    editingBookingId      = bookingId;
+    editingVenueBookingId = null;
 
-    const body = document.getElementById('editModalBody');
+    document.getElementById('editModalBody').innerHTML = buildEditForm(booking.date, booking.timeSlots);
+    openModal('editModal');
+};
 
-    // 날짜 + 시간대 변경 폼
-    body.innerHTML = `
+// 장소 기간 변경 모달 열기
+window.openVenueEditModal = function(bookingId) {
+    const booking = allVenueBookings.find(b => b.id === bookingId);
+    if (!booking) return;
+    editingVenueBookingId = bookingId;
+    editingBookingId      = null;
+
+    document.getElementById('editModalBody').innerHTML = buildEditForm(booking.date, booking.timeSlots);
+    openModal('editModal');
+};
+
+function buildEditForm(date, slots) {
+    return `
         <div class="form-group">
             <label class="form-label">날짜</label>
-            <input type="date" id="editDate" class="form-input" value="${booking.date || ''}">
+            <input type="date" id="editDate" class="form-input" value="${date || ''}">
         </div>
         <div class="form-group">
             <label class="form-label">시간대</label>
             <div class="timeslot-group">
-                ${['ET','EP1','EP2'].map(slot => `
+                ${['ET','EP1','EP2'].map(s => `
                     <label class="timeslot-label">
-                        <input type="checkbox" name="editSlot" value="${slot}"
-                               ${(booking.timeSlots||[]).includes(slot) ? 'checked' : ''}>
-                        <span class="timeslot-chip">${slot}</span>
+                        <input type="checkbox" name="editSlot" value="${s}"
+                               ${(slots||[]).includes(s) ? 'checked' : ''}>
+                        <span class="timeslot-chip">${s}</span>
                     </label>`).join('')}
             </div>
         </div>`;
+}
 
-    openModal('editModal');
-};
-
-// 기간 변경 저장
+// 기간 변경 저장 (장비 / 장소 공통 핸들러)
 document.getElementById('editModalSaveBtn').addEventListener('click', async () => {
-    const booking = allBookings.find(b => b.id === editingBookingId);
-    if (!booking) return;
-
     const newDate  = document.getElementById('editDate')?.value;
     const newSlots = [...document.querySelectorAll('[name="editSlot"]:checked')].map(c => c.value);
+    const today    = new Date().toISOString().split('T')[0];
 
-    if (!newDate)            return showToast('날짜를 선택해주세요.', 'error');
+    if (!newDate)              return showToast('날짜를 선택해주세요.', 'error');
     if (newSlots.length === 0) return showToast('시간대를 1개 이상 선택해주세요.', 'error');
-    if (newDate < new Date().toISOString().split('T')[0])
-        return showToast('과거 날짜로는 변경할 수 없습니다.', 'error');
-
-    // 변경 후 중복 신청 확인 (자기 자신 제외)
-    const conflicting = allBookings.filter(b =>
-        b.id !== editingBookingId &&
-        b.equipmentId === booking.equipmentId &&
-        b.status !== 'cancelled' &&
-        getBookingDates(b).includes(newDate) &&
-        (b.timeSlots || []).some(s => newSlots.includes(s))
-    );
-    if (conflicting.length > 0) {
-        const blocker = conflicting[0].userName || '다른 부원';
-        return showToast(`변경하려는 날짜/시간대는 "${blocker}"이(가) 이미 신청한 일정과 겹칩니다.`, 'error');
-    }
+    if (newDate < today)       return showToast('과거 날짜로는 변경할 수 없습니다.', 'error');
 
     const updateData = { date: newDate, timeSlots: newSlots };
 
-    try {
-        await updateDoc(doc(db, 'bookings', editingBookingId), updateData);
-        const idx = allBookings.findIndex(b => b.id === editingBookingId);
-        if (idx !== -1) Object.assign(allBookings[idx], updateData);
-        closeModal('editModal');
-        renderManagePage();
-        renderMyBookingsMini();
-        renderCalendar();
-        showToast('기간이 변경되었습니다.', 'success');
-    } catch (e) {
-        console.error(e);
-        showToast('변경 중 오류가 발생했습니다.', 'error');
+    // ── 장비 신청 변경 ──
+    if (editingBookingId) {
+        const booking = allBookings.find(b => b.id === editingBookingId);
+        if (!booking) return;
+
+        const conflicting = allBookings.filter(b =>
+            b.id !== editingBookingId &&
+            b.equipmentId === booking.equipmentId &&
+            b.status !== 'cancelled' &&
+            getBookingDates(b).includes(newDate) &&
+            (b.timeSlots || []).some(s => newSlots.includes(s))
+        );
+        if (conflicting.length > 0) {
+            const blocker = conflicting[0].userName || '다른 부원';
+            return showToast(`변경하려는 날짜/시간대는 "${blocker}"이(가) 이미 신청한 일정과 겹칩니다.`, 'error');
+        }
+
+        try {
+            await updateDoc(doc(db, 'bookings', editingBookingId), updateData);
+            const idx = allBookings.findIndex(b => b.id === editingBookingId);
+            if (idx !== -1) Object.assign(allBookings[idx], updateData);
+            closeModal('editModal');
+            renderManagePage();
+            renderMyBookingsMini();
+            renderCalendar();
+            showToast('기간이 변경되었습니다.', 'success');
+        } catch (e) {
+            console.error(e);
+            showToast('변경 중 오류가 발생했습니다.', 'error');
+        }
+        return;
+    }
+
+    // ── 장소 신청 변경 ──
+    if (editingVenueBookingId) {
+        try {
+            await updateDoc(doc(db, 'venueBookings', editingVenueBookingId), updateData);
+            const idx = allVenueBookings.findIndex(b => b.id === editingVenueBookingId);
+            if (idx !== -1) Object.assign(allVenueBookings[idx], updateData);
+            closeModal('editModal');
+            renderVenueManagePage();
+            renderVenuePage();
+            if (calMode === 'venue') renderCalendar();
+            showToast('기간이 변경되었습니다.', 'success');
+        } catch (e) {
+            console.error(e);
+            showToast('변경 중 오류가 발생했습니다.', 'error');
+        }
     }
 });
 
@@ -1018,8 +1172,277 @@ document.getElementById('submitBookingBtn').addEventListener('click', async () =
 });
 
 // ============================================================
-// 9. 유틸리티 함수들
+// 9. 장소 신청 기능
 // ============================================================
+
+// ── 신청 타입 전환 ───────────────────────────────────────────
+window.switchBookingType = function(type) {
+    document.getElementById('equipBookingSection').style.display = type === 'equip' ? '' : 'none';
+    document.getElementById('venueBookingSection').style.display = type === 'venue' ? '' : 'none';
+    document.getElementById('bookingTypeEquip').classList.toggle('active', type === 'equip');
+    document.getElementById('bookingTypeVenue').classList.toggle('active', type === 'venue');
+};
+
+window.goToBookingEquip = function() {
+    switchBookingType('equip');
+    goToPage('booking');
+};
+
+window.goToBookingVenue = function() {
+    switchBookingType('venue');
+    goToPage('booking');
+};
+
+// ── 장소 선택 ────────────────────────────────────────────────
+window.selectVenue = function(venue) {
+    selectedVenueForBooking = venue;
+    document.querySelectorAll('.venue-select-item').forEach(el => {
+        el.classList.toggle('selected', el.dataset.venue === venue);
+    });
+    updateVenuePreview();
+};
+
+// ── 장소 신청 미리보기 ────────────────────────────────────────
+document.getElementById('venueDate')?.addEventListener('change', updateVenuePreview);
+document.querySelectorAll('[name="venueTimeSlot"]').forEach(cb => {
+    cb.addEventListener('change', updateVenuePreview);
+});
+document.getElementById('venuePurpose')?.addEventListener('input', updateVenuePreview);
+
+function updateVenuePreview() {
+    const preview = document.getElementById('venueBookingPreview');
+    if (!selectedVenueForBooking) { preview.classList.add('hidden'); return; }
+
+    preview.classList.remove('hidden');
+    document.getElementById('previewVenue').textContent = selectedVenueForBooking;
+    document.getElementById('previewVenueUser').textContent =
+        currentUser?.displayName || currentUser?.email || '나';
+
+    const date  = document.getElementById('venueDate').value;
+    const slots = [...document.querySelectorAll('[name="venueTimeSlot"]:checked')].map(c => c.value);
+    document.getElementById('previewVenueDate').textContent  = date ? formatDate(date) : '날짜 미선택';
+    document.getElementById('previewVenueTimes').textContent = slots.length > 0 ? slots.join(', ') : '시간대 미선택';
+}
+
+// ── 장소 신청 초기화 ─────────────────────────────────────────
+window.resetVenueForm = function() {
+    selectedVenueForBooking = null;
+    document.querySelectorAll('.venue-select-item').forEach(el => el.classList.remove('selected'));
+    document.querySelectorAll('[name="venueTimeSlot"]').forEach(cb => cb.checked = false);
+    document.getElementById('venuePurpose').value = '';
+    document.getElementById('venueBookingPreview').classList.add('hidden');
+    document.getElementById('venueDate').value = new Date().toISOString().split('T')[0];
+};
+
+// ── 장소 신청 제출 ───────────────────────────────────────────
+document.getElementById('submitVenueBtn')?.addEventListener('click', async () => {
+    if (!selectedVenueForBooking) return showToast('장소를 선택해주세요.', 'error');
+
+    const purpose = document.getElementById('venuePurpose').value.trim();
+    if (!purpose)  return showToast('사용 목적을 입력해주세요.', 'error');
+
+    const today = new Date().toISOString().split('T')[0];
+    const date  = document.getElementById('venueDate').value;
+    const slots = [...document.querySelectorAll('[name="venueTimeSlot"]:checked')].map(c => c.value);
+
+    if (!date)              return showToast('날짜를 선택해주세요.', 'error');
+    if (date < today)       return showToast('오늘 이후 날짜를 선택해주세요.', 'error');
+    if (slots.length === 0) return showToast('시간대(ET / EP1 / EP2)를 1개 이상 선택해주세요.', 'error');
+
+    const venueData = {
+        venue:     selectedVenueForBooking,
+        userId:    currentUser.uid,
+        userName:  currentUser.displayName || currentUser.email,
+        userEmail: currentUser.email,
+        purpose:   purpose,
+        status:    'active',
+        date,
+        timeSlots: slots,
+        createdAt: Timestamp.now()
+    };
+
+    const btn = document.getElementById('submitVenueBtn');
+    btn.disabled = true;
+    btn.textContent = '신청 중...';
+
+    try {
+        const docRef = await addDoc(collection(db, 'venueBookings'), venueData);
+        allVenueBookings.unshift({ id: docRef.id, ...venueData });
+
+        showToast('장소 신청이 완료되었습니다! 🎉', 'success');
+        resetVenueForm();
+        renderVenuePage();
+        renderVenueManagePage();
+        if (calMode === 'venue') renderCalendar();
+
+        setTimeout(() => {
+            switchManageType('venue');
+            goToPage('manage');
+        }, 1200);
+    } catch (e) {
+        console.error('장소 신청 저장 실패:', e);
+        showToast('신청 중 오류가 발생했습니다. 다시 시도해주세요.', 'error');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = `
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="20 6 9 17 4 12"></polyline>
+            </svg> 신청 완료`;
+    }
+});
+
+// ── 장소 신청현황 페이지 렌더링 ──────────────────────────────
+const venueDateFilter = document.getElementById('venueDateFilter');
+venueDateFilter.value = new Date().toISOString().split('T')[0];
+venueDateFilter.addEventListener('change', renderVenuePage);
+document.getElementById('venueTodayBtn').addEventListener('click', () => {
+    venueDateFilter.value = new Date().toISOString().split('T')[0];
+    renderVenuePage();
+});
+
+const VENUES = [
+    { key: '동아리실', icon: '🎙️', headerClass: 'club' },
+    { key: '스튜디오', icon: '🎬', headerClass: 'studio' }
+];
+const TIME_SLOTS = ['ET', 'EP1', 'EP2'];
+
+function renderVenuePage() {
+    const selectedDate = venueDateFilter.value;
+    const grid = document.getElementById('venueStatusGrid');
+
+    grid.innerHTML = VENUES.map(venue => {
+        const slotsHTML = TIME_SLOTS.map(slot => {
+            const booking = allVenueBookings.find(b =>
+                b.venue === venue.key &&
+                b.status !== 'cancelled' &&
+                b.date === selectedDate &&
+                (b.timeSlots || []).includes(slot)
+            );
+
+            let rowClass = 'venue-slot-row';
+            let contentHTML;
+
+            if (!booking) {
+                contentHTML = `<span class="venue-slot-empty">사용 가능</span>`;
+            } else {
+                const isMine = booking.userId === currentUser.uid;
+                rowClass += isMine ? ' mine' : ' occupied';
+                const who = isMine ? '나' : escHtml(booking.userName || '부원');
+                contentHTML = `
+                    <div class="venue-slot-user">${isMine ? '나' : who}${isMine ? ' <span style="color:var(--success);font-size:0.72rem;font-weight:700">(나)</span>' : ''}</div>
+                    ${booking.purpose ? `<div class="venue-slot-purpose">💬 ${escHtml(booking.purpose)}</div>` : ''}`;
+            }
+
+            return `
+                <div class="${rowClass}">
+                    <span class="venue-slot-chip">${slot}</span>
+                    <div class="venue-slot-content">${contentHTML}</div>
+                </div>`;
+        }).join('');
+
+        return `
+            <div class="venue-status-card">
+                <div class="venue-status-header ${venue.headerClass}">
+                    <span class="venue-status-icon">${venue.icon}</span>
+                    <div>
+                        <div class="venue-status-name">${venue.key}</div>
+                        <div style="font-size:0.72rem;opacity:0.75;color:white">${formatDate(selectedDate)}</div>
+                    </div>
+                </div>
+                <div class="venue-status-slots">${slotsHTML}</div>
+            </div>`;
+    }).join('');
+}
+
+// ── 장소 신청 관리 목록 렌더링 ──────────────────────────────
+function renderVenueManagePage() {
+    const container = document.getElementById('venueBookingsList');
+    if (!container) return;
+    const today = new Date().toISOString().split('T')[0];
+    let list = myVenueBookings();
+
+    if (currentManageFilter === 'active') {
+        list = list.filter(b => b.status !== 'cancelled' && b.date >= today);
+    } else if (currentManageFilter === 'past') {
+        list = list.filter(b => b.status !== 'cancelled' && b.date < today);
+    } else if (currentManageFilter === 'cancelled') {
+        list = list.filter(b => b.status === 'cancelled');
+    }
+
+    if (list.length === 0) {
+        container.innerHTML = `
+            <div class="empty-state">
+                <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                    <polyline points="9 22 9 12 15 12 15 22"></polyline>
+                </svg>
+                <p>해당하는 장소 신청 내역이 없습니다</p>
+                ${currentManageFilter === 'active'
+                    ? `<button class="btn btn-primary btn-sm" onclick="goToBookingVenue()">장소 신청하기</button>`
+                    : ''}
+            </div>`;
+        return;
+    }
+
+    container.innerHTML = list.map(b => {
+        const isCancelled = b.status === 'cancelled';
+        const isPast      = b.date < today;
+        const venueIcon   = b.venue === '스튜디오' ? '🎬' : '🎙️';
+        const slots       = (b.timeSlots || []).join(', ');
+        const dateStr     = formatDate(b.date) + (slots ? ` (${slots})` : '');
+
+        let badgeHTML;
+        if (isCancelled) badgeHTML = `<span class="badge badge-muted">취소됨</span>`;
+        else if (isPast) badgeHTML = `<span class="badge badge-muted">완료</span>`;
+        else             badgeHTML = `<span class="badge badge-success">사용 예정</span>`;
+
+        const actionsHTML = (!isCancelled && !isPast) ? `
+            <button class="btn btn-outline btn-sm" onclick="openVenueEditModal('${b.id}')">기간 변경</button>
+            <button class="btn btn-danger btn-sm" onclick="cancelVenueBooking('${b.id}')">취소</button>` : '';
+
+        return `
+            <div class="booking-item ${isCancelled ? 'cancelled' : ''}">
+                <div class="booking-item-img-placeholder">${venueIcon}</div>
+                <div class="booking-item-info">
+                    <div class="booking-item-name">${escHtml(b.venue || '장소')}</div>
+                    <div class="booking-item-date">
+                        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="3" y="4" width="18" height="18" rx="2"></rect>
+                            <line x1="16" y1="2" x2="16" y2="6"></line>
+                            <line x1="8" y1="2" x2="8" y2="6"></line>
+                            <line x1="3" y1="10" x2="21" y2="10"></line>
+                        </svg>
+                        ${escHtml(dateStr)}
+                    </div>
+                    ${b.purpose ? `<div style="font-size:0.76rem;color:var(--text-muted);margin-top:3px">${escHtml(b.purpose)}</div>` : ''}
+                </div>
+                <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px">
+                    ${badgeHTML}
+                    <div class="booking-item-actions">${actionsHTML}</div>
+                </div>
+            </div>`;
+    }).join('');
+}
+
+// 장소 신청 취소
+window.cancelVenueBooking = async function(bookingId) {
+    if (!confirm('장소 신청을 취소하시겠습니까?')) return;
+    try {
+        await updateDoc(doc(db, 'venueBookings', bookingId), {
+            status: 'cancelled',
+            cancelledAt: Timestamp.now()
+        });
+        const idx = allVenueBookings.findIndex(b => b.id === bookingId);
+        if (idx !== -1) allVenueBookings[idx].status = 'cancelled';
+        renderVenueManagePage();
+        renderVenuePage();
+        if (calMode === 'venue') renderCalendar();
+        showToast('장소 신청이 취소되었습니다.', 'success');
+    } catch (e) {
+        console.error(e);
+        showToast('취소 중 오류가 발생했습니다.', 'error');
+    }
+};
 
 // 신청의 마지막 날짜 반환 (정렬/필터용)
 function getLatestDate(booking) {

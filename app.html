@@ -44,8 +44,8 @@
                 <span class="nav-label">대시보드</span>
             </li>
 
-            <!-- 장비 사용현황 -->
-            <li class="nav-item" data-page="equipment" title="장비 사용현황">
+            <!-- 사용 현황 (장비+장소 통합) -->
+            <li class="nav-item" data-page="equipment" title="사용 현황">
                 <span class="nav-icon">
                     <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <rect x="2" y="3" width="20" height="14" rx="2"></rect>
@@ -53,7 +53,7 @@
                         <line x1="12" y1="17" x2="12" y2="21"></line>
                     </svg>
                 </span>
-                <span class="nav-label">장비 사용현황</span>
+                <span class="nav-label">사용 현황</span>
             </li>
 
             <!-- 사용 신청 확인 및 관리 -->
@@ -79,6 +79,7 @@
                 </span>
                 <span class="nav-label">사용 신청 작성</span>
             </li>
+
         </ul>
 
         <!-- 하단: 유저 정보 + 로그아웃 -->
@@ -113,13 +114,6 @@
                     <h1 class="page-title" id="dashboardTitle">안녕하세요 👋</h1>
                     <p class="page-subtitle">오늘의 장비 현황과 나의 신청 내역을 확인하세요</p>
                 </div>
-                <button class="btn btn-primary" onclick="goToPage('booking')">
-                    <svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                        <line x1="12" y1="5" x2="12" y2="19"></line>
-                        <line x1="5" y1="12" x2="19" y2="12"></line>
-                    </svg>
-                    사용 신청하기
-                </button>
             </div>
 
             <div class="dashboard-grid">
@@ -142,6 +136,12 @@
                         </div>
                     </div>
 
+                    <!-- 달력 모드 토글 (filter-tab 스타일로 통일) -->
+                    <div class="bookings-filter" style="margin-bottom:10px;margin-top:2px">
+                        <button class="filter-tab active" id="calToggleEquip" onclick="setCalendarMode('equip')">장비 사용</button>
+                        <button class="filter-tab" id="calToggleVenue" onclick="setCalendarMode('venue')">장소 신청</button>
+                    </div>
+
                     <!-- 요일 헤더 -->
                     <div class="calendar-weekdays">
                         <div class="weekday">일</div>
@@ -157,12 +157,20 @@
                     <div class="calendar-days" id="calendarDays"></div>
 
                     <!-- 달력 범례 -->
-                    <div style="display:flex;gap:16px;margin-top:16px;padding-top:12px;border-top:1px solid var(--border);flex-wrap:wrap">
+                    <div id="calLegendEquip" style="display:flex;gap:16px;margin-top:16px;padding-top:12px;border-top:1px solid var(--border);flex-wrap:wrap">
                         <span style="display:flex;align-items:center;gap:5px;font-size:0.72rem;color:var(--text-secondary)">
                             <span style="width:10px;height:10px;border-radius:50%;background:var(--primary);display:inline-block"></span>신청된 장비
                         </span>
                         <span style="display:flex;align-items:center;gap:5px;font-size:0.72rem;color:var(--text-secondary)">
                             <span style="width:10px;height:10px;border-radius:50%;background:var(--success);display:inline-block"></span>내 신청
+                        </span>
+                    </div>
+                    <div id="calLegendVenue" style="display:none;gap:16px;margin-top:16px;padding-top:12px;border-top:1px solid var(--border);flex-wrap:wrap">
+                        <span style="display:flex;align-items:center;gap:5px;font-size:0.72rem;color:var(--text-secondary)">
+                            <span style="width:10px;height:10px;border-radius:50%;background:#0EA5E9;display:inline-block"></span>장소 신청됨
+                        </span>
+                        <span style="display:flex;align-items:center;gap:5px;font-size:0.72rem;color:var(--text-secondary)">
+                            <span style="width:10px;height:10px;border-radius:50%;background:var(--success);display:inline-block"></span>내 장소 신청
                         </span>
                     </div>
                 </div>
@@ -173,13 +181,23 @@
                     <div class="card quick-action-card">
                         <h3>장비 사용 신청</h3>
                         <p>촬영, 마이크 등을<br>간편하게 예약하세요</p>
-                        <button class="btn-quick" onclick="goToPage('booking')">
-                            <svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                                <line x1="12" y1="5" x2="12" y2="19"></line>
-                                <line x1="5" y1="12" x2="19" y2="12"></line>
-                            </svg>
-                            지금 신청하기
-                        </button>
+                        <div style="display:flex;gap:8px;flex-wrap:wrap">
+                            <button class="btn-quick" onclick="goToBookingEquip()">
+                                <svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                    <rect x="2" y="3" width="20" height="14" rx="2"></rect>
+                                    <line x1="8" y1="21" x2="16" y2="21"></line>
+                                    <line x1="12" y1="17" x2="12" y2="21"></line>
+                                </svg>
+                                장비 신청
+                            </button>
+                            <button class="btn-quick" onclick="goToBookingVenue()">
+                                <svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                                    <polyline points="9 22 9 12 15 12 15 22"></polyline>
+                                </svg>
+                                장소이동 신청
+                            </button>
+                        </div>
                     </div>
 
                     <!-- 날짜 클릭 시 표시되는 상세 패널 (기본 숨김) -->
@@ -224,29 +242,56 @@
             </div>
         </div>
 
-        <!-- ── 페이지 2: 장비 사용현황 ─────────────────────── -->
+        <!-- ── 페이지 2: 사용 현황 (장비 + 장소 통합) ──────── -->
         <div id="page-equipment" class="page">
             <div class="page-header">
                 <div>
-                    <h1 class="page-title">장비 사용현황</h1>
-                    <p class="page-subtitle">날짜를 선택해 장비의 사용 상태를 확인하세요</p>
+                    <h1 class="page-title">사용 현황</h1>
+                    <p class="page-subtitle">날짜를 선택해 장비 사용 상태와 장소 신청현황을 확인하세요</p>
                 </div>
             </div>
 
-            <!-- 날짜 필터 -->
-            <div class="equipment-filter-bar">
-                <label style="font-size:0.85rem;font-weight:600;color:var(--text-secondary)">날짜 선택</label>
-                <input type="date" id="equipmentDateFilter" class="form-input"
-                       style="max-width:180px;width:auto">
-                <button class="btn btn-outline btn-sm" id="equipmentTodayBtn">오늘</button>
-                <span class="equipment-count" id="equipmentCount"></span>
+            <!-- 유형 토글 -->
+            <div class="bookings-filter" style="margin-bottom:20px">
+                <button class="filter-tab active" id="statusTypeEquip" onclick="switchStatusType('equip')">장비 사용현황</button>
+                <button class="filter-tab" id="statusTypeVenue" onclick="switchStatusType('venue')">장소 신청현황</button>
             </div>
 
-            <!-- 장비 그리드 (JS로 채워짐) -->
-            <div class="equipment-grid" id="equipmentGrid">
-                <div class="page-loading">
-                    <div class="spinner"></div>
-                    <span>장비 목록을 불러오는 중...</span>
+            <!-- 장비 현황 섹션 -->
+            <div id="equipStatusSection">
+                <div class="equipment-filter-bar">
+                    <label style="font-size:0.85rem;font-weight:600;color:var(--text-secondary)">날짜 선택</label>
+                    <input type="date" id="equipmentDateFilter" class="form-input" style="max-width:180px;width:auto">
+                    <button class="btn btn-outline btn-sm" id="equipmentTodayBtn">오늘</button>
+                    <span class="equipment-count" id="equipmentCount"></span>
+                </div>
+                <div class="equipment-grid" id="equipmentGrid">
+                    <div class="page-loading">
+                        <div class="spinner"></div>
+                        <span>장비 목록을 불러오는 중...</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 장소 신청현황 섹션 -->
+            <div id="venueStatusSection" style="display:none">
+                <div class="equipment-filter-bar">
+                    <label style="font-size:0.85rem;font-weight:600;color:var(--text-secondary)">날짜 선택</label>
+                    <input type="date" id="venueDateFilter" class="form-input" style="max-width:180px;width:auto">
+                    <button class="btn btn-outline btn-sm" id="venueTodayBtn">오늘</button>
+                    <button class="btn btn-primary btn-sm" onclick="switchBookingType('venue');goToPage('booking')" style="margin-left:auto">
+                        <svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px;stroke:currentColor">
+                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                        </svg>
+                        장소 신청하기
+                    </button>
+                </div>
+                <div class="venue-status-grid" id="venueStatusGrid">
+                    <div class="page-loading">
+                        <div class="spinner"></div>
+                        <span>장소 신청현황을 불러오는 중...</span>
+                    </div>
                 </div>
             </div>
         </div>
@@ -256,8 +301,14 @@
             <div class="page-header">
                 <div>
                     <h1 class="page-title">신청 확인·관리</h1>
-                    <p class="page-subtitle">나의 장비 사용 신청 내역을 확인하고 관리하세요</p>
+                    <p class="page-subtitle">나의 장비 및 장소 신청 내역을 확인하고 관리하세요</p>
                 </div>
+            </div>
+
+            <!-- 신청 유형 토글 (booking-type-btn 스타일로 상태필터와 구분) -->
+            <div class="booking-type-toggle" style="margin-bottom:20px">
+                <button class="booking-type-btn active" id="manageTypeEquip" onclick="switchManageType('equip')">📷 장비 신청</button>
+                <button class="booking-type-btn" id="manageTypeVenue" onclick="switchManageType('venue')">🏠 장소 신청</button>
             </div>
 
             <!-- 상태 필터 탭 -->
@@ -268,11 +319,19 @@
                 <button class="filter-tab" data-filter="all">전체</button>
             </div>
 
-            <!-- 신청 목록 (JS로 채워짐) -->
+            <!-- 장비 신청 목록 -->
             <div class="bookings-list" id="bookingsList">
                 <div class="page-loading">
                     <div class="spinner"></div>
                     <span>신청 내역을 불러오는 중...</span>
+                </div>
+            </div>
+
+            <!-- 장소 신청 목록 -->
+            <div class="bookings-list" id="venueBookingsList" style="display:none">
+                <div class="page-loading">
+                    <div class="spinner"></div>
+                    <span>장소 신청 내역을 불러오는 중...</span>
                 </div>
             </div>
         </div>
@@ -282,11 +341,22 @@
             <div class="page-header">
                 <div>
                     <h1 class="page-title">사용 신청 작성</h1>
-                    <p class="page-subtitle">사용할 장비와 기간을 선택해 신청서를 작성하세요</p>
+                    <p class="page-subtitle">장비 사용 또는 장소이동 신청서를 작성하세요</p>
                 </div>
             </div>
 
-            <div class="booking-form-wrapper">
+            <!-- 신청 유형 토글 -->
+            <div class="booking-type-toggle" style="margin-bottom:20px">
+                <button class="booking-type-btn active" id="bookingTypeEquip" onclick="switchBookingType('equip')">
+                    📷 장비 사용 신청
+                </button>
+                <button class="booking-type-btn" id="bookingTypeVenue" onclick="switchBookingType('venue')">
+                    🏠 장소이동 신청
+                </button>
+            </div>
+
+            <!-- ── 장비 사용 신청 폼 ── -->
+            <div class="booking-form-wrapper" id="equipBookingSection">
                 <div class="card booking-form-card">
 
                     <!-- STEP 1: 장비 선택 -->
@@ -296,7 +366,6 @@
                             사용할 장비 선택
                         </label>
                         <p class="form-hint">신청할 장비를 클릭해 선택하세요 (1개 선택)</p>
-                        <!-- 장비 목록 (JS로 채워짐) -->
                         <div class="equipment-selector-grid" id="equipmentSelectorGrid">
                             <div class="page-loading" style="min-height:100px;grid-column:1/-1">
                                 <div class="spinner"></div>
@@ -372,7 +441,100 @@
                     </div>
                 </div>
             </div>
+
+            <!-- ── 장소이동 신청 폼 ── -->
+            <div class="booking-form-wrapper" id="venueBookingSection" style="display:none">
+                <div class="card booking-form-card">
+
+                    <!-- STEP 1: 장소 선택 -->
+                    <div class="form-group">
+                        <label class="form-label">
+                            <span style="color:var(--primary);margin-right:6px">①</span>
+                            장소 선택
+                        </label>
+                        <p class="form-hint">사용할 장소를 선택하세요</p>
+                        <div class="venue-selector-grid">
+                            <div class="venue-select-item" data-venue="동아리실" onclick="selectVenue('동아리실')">
+                                <span class="venue-select-icon">🎙️</span>
+                                <span class="venue-select-name">동아리실</span>
+                            </div>
+                            <div class="venue-select-item" data-venue="스튜디오" onclick="selectVenue('스튜디오')">
+                                <span class="venue-select-icon">🎬</span>
+                                <span class="venue-select-name">스튜디오</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- STEP 2: 날짜 및 시간 선택 -->
+                    <div class="form-group">
+                        <label class="form-label">
+                            <span style="color:var(--primary);margin-right:6px">②</span>
+                            날짜 및 시간 선택
+                        </label>
+                        <input type="date" id="venueDate" class="form-input" style="max-width:220px">
+                        <p class="form-hint" style="margin-top:8px">사용할 시간대를 선택하세요 (중복 선택 가능)</p>
+                        <div class="timeslot-group">
+                            <label class="timeslot-label">
+                                <input type="checkbox" name="venueTimeSlot" value="ET">
+                                <span class="timeslot-chip">ET</span>
+                            </label>
+                            <label class="timeslot-label">
+                                <input type="checkbox" name="venueTimeSlot" value="EP1">
+                                <span class="timeslot-chip">EP1</span>
+                            </label>
+                            <label class="timeslot-label">
+                                <input type="checkbox" name="venueTimeSlot" value="EP2">
+                                <span class="timeslot-chip">EP2</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- STEP 3: 사용 목적 -->
+                    <div class="form-group">
+                        <label class="form-label" for="venuePurpose">
+                            <span style="color:var(--primary);margin-right:6px">③</span>
+                            사용 목적
+                        </label>
+                        <textarea id="venuePurpose" class="form-input form-textarea"
+                                  placeholder="예) 방송 준비, 장비 점검, 회의 등"
+                                  rows="3"></textarea>
+                    </div>
+
+                    <!-- 신청 미리보기 -->
+                    <div class="booking-preview hidden" id="venueBookingPreview">
+                        <h4>신청 내용 미리보기</h4>
+                        <div class="preview-row">
+                            <span class="preview-label">장소</span>
+                            <span class="preview-value" id="previewVenue">—</span>
+                        </div>
+                        <div class="preview-row">
+                            <span class="preview-label">날짜</span>
+                            <span class="preview-value" id="previewVenueDate">—</span>
+                        </div>
+                        <div class="preview-row">
+                            <span class="preview-label">시간대</span>
+                            <span class="preview-value" id="previewVenueTimes">—</span>
+                        </div>
+                        <div class="preview-row">
+                            <span class="preview-label">신청인</span>
+                            <span class="preview-value" id="previewVenueUser">—</span>
+                        </div>
+                    </div>
+
+                    <!-- 제출 버튼 -->
+                    <div style="display:flex;gap:10px;justify-content:flex-end">
+                        <button class="btn btn-outline" type="button" onclick="resetVenueForm()">초기화</button>
+                        <button class="btn btn-primary btn-lg" id="submitVenueBtn" type="button">
+                            <svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="20 6 9 17 4 12"></polyline>
+                            </svg>
+                            신청 완료
+                        </button>
+                    </div>
+                </div>
+            </div>
         </div>
+
 
     </main><!-- /main-content -->
 </div><!-- /app-container -->
