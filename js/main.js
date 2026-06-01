@@ -1327,21 +1327,24 @@ function renderVenuePage() {
             } else {
                 const hasMine = bookings.some(b => b.userId === currentUser.uid);
                 rowClass += hasMine ? ' mine' : ' occupied';
-                contentHTML = bookings.map(b => {
+                contentHTML = bookings.map((b, idx) => {
                     const isMine = b.userId === currentUser.uid;
-                    const who = isMine ? '나' : escHtml(b.userName || '부원');
+                    const who    = isMine ? '나' : escHtml(b.userName || '부원');
+                    const isLast = idx === bookings.length - 1;
                     return `
-                        <div style="display:flex;align-items:baseline;gap:6px;padding:2px 0;${bookings.length > 1 ? 'border-bottom:1px solid rgba(0,0,0,0.06);' : ''}">
-                            <span class="venue-slot-user" style="flex:1">${who}${isMine ? ' <span style="color:var(--success);font-size:0.7rem;font-weight:700">(나)</span>' : ''}</span>
-                            ${b.purpose ? `<span class="venue-slot-purpose" style="font-size:0.72rem;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:120px" title="${escHtml(b.purpose)}">💬 ${escHtml(b.purpose)}</span>` : ''}
+                        <div style="${!isLast ? 'padding-bottom:7px;margin-bottom:7px;border-bottom:1px solid rgba(0,0,0,0.08);' : ''}">
+                            <div style="font-size:0.84rem;font-weight:600;color:var(--text)">
+                                👤 ${who}${isMine ? ' <span style="color:var(--success);font-size:0.72rem;font-weight:700">(나)</span>' : ''}
+                            </div>
+                            ${b.purpose ? `<div style="font-size:0.78rem;color:var(--text-secondary);margin-top:3px;line-height:1.4">💬 ${escHtml(b.purpose)}</div>` : ''}
                         </div>`;
                 }).join('');
             }
 
             return `
-                <div class="${rowClass}">
-                    <span class="venue-slot-chip">${slot}</span>
-                    <div class="venue-slot-content" style="min-width:0;flex:1">${contentHTML}</div>
+                <div class="${rowClass}" style="align-items:flex-start">
+                    <span class="venue-slot-chip" style="padding-top:2px">${slot}</span>
+                    <div style="flex:1;min-width:0">${contentHTML}</div>
                 </div>`;
         }).join('');
 
